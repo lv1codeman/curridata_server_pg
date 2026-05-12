@@ -32,6 +32,16 @@ from yt_dlp.utils import DownloadError
 # 初始化 FastAPI 應用
 app = FastAPI(title="Curri Data API")
 
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"]
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 # --- 資料模型 (Pydantic) ---
 class LoginRequest(BaseModel):
     username: str 
