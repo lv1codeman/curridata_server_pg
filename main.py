@@ -1,4 +1,4 @@
-# 引入您提供的 MSSQL 資料庫輔助函數和例外
+# region 宣告import 
 from database_helper_pg import execute_query, DatabaseError, UniqueConstraintError, DatabaseCursor
 import time
 import tempfile
@@ -29,10 +29,10 @@ import aiofiles
 from yt_dlp import YoutubeDL
 from yt_dlp.utils import DownloadError
 
-# 初始化 FastAPI 應用
+# endregion
+
+# region 初始化 FastAPI 應用 
 app = FastAPI(title="Curri Data API")
-
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -40,9 +40,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# endregion
 
-
-# --- 資料模型 (Pydantic) ---
+# region 資料模型 (Pydantic) 
 class LoginRequest(BaseModel):
     username: str 
     password: str
@@ -80,32 +80,27 @@ class map_cls_dept(BaseModel):
     CLASS: str
     DEPT_S: str
 
+# endregion
+
+# region 測試server狀態by GET POST 
 # 測試GET功能
-# ... (get_test 保持不變) ...
 @app.get("/get_test", summary="測試GET")
 async def get_test():
     print("get test成功")
     return "伺服器端訪問成功。"
+
 # 測試POST功能
-# ... (post_test 保持不變) ...
 @app.post("/post_test", summary="測試POST")
 async def post_test(item: DownloadRequest):
     print("url: ", item.url)
     print("format: ", item.format)
     
     return "post成功囉"
+#endregion
 
-
-from fastapi import HTTPException
-
-from fastapi import HTTPException
-
+# region [API] 使用者登入 驗證帳號密碼 
 @app.post("/api/user_login", summary="使用者登入 (依 account / pwd 驗證)")
 def user_login(request: LoginRequest):
-    """
-    根據 MEMBERS.account / MEMBERS.pwd 驗證使用者
-    回傳 name 與 auth 權限資訊
-    """
 
     sql = """
         SELECT name, auth
@@ -135,12 +130,10 @@ def user_login(request: LoginRequest):
             "username": request.username
         }
     }
+# endregion
 
-
-
-# --- depts ---
+# region [API] depts表相關 
 # 1. 讀取系所表(含承辦人及課務組承辦人資料)
-# ... (get_depts 保持不變) ...
 @app.get("/get_depts", summary="讀取所有系所資料及承辦人資訊")
 async def get_depts():
     try:
@@ -158,5 +151,8 @@ LEFT JOIN
         return data
     except DatabaseError as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch departments: {e}")
+# endregion
+
+
 
 print(f"curridata_server已啟動，等候客戶端訪問中...")
