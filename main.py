@@ -95,6 +95,49 @@ async def post_test(item: DownloadRequest):
     
     return "post成功囉"
 
+
+from fastapi import HTTPException
+
+from fastapi import HTTPException
+
+@app.post("/api/user_login", summary="使用者登入 (依 account / pwd 驗證)")
+def user_login(request: LoginRequest):
+    """
+    根據 MEMBERS.account / MEMBERS.pwd 驗證使用者
+    回傳 name 與 auth 權限資訊
+    """
+
+    sql = """
+        SELECT name, auth
+        FROM members
+        WHERE account = %s AND pwd = %s
+        LIMIT 1
+    """
+
+    try:
+        user_data = execute_query(
+            sql,
+            (request.username, request.password),
+            fetch_one=True
+        )
+    except Exception as e:
+        print(f"❌ 登入查詢資料庫失敗: {e}")
+        raise HTTPException(status_code=500, detail="伺服器錯誤: 資料庫連線失敗")
+
+    if not user_data:
+        raise HTTPException(status_code=401, detail="帳號或密碼錯誤")
+
+    return {
+        "message": "登入成功",
+        "user": {
+            "name": user_data["name"],
+            "auth": user_data["auth"],
+            "username": request.username
+        }
+    }
+
+
+
 # --- depts ---
 # 1. 讀取系所表(含承辦人及課務組承辦人資料)
 # ... (get_depts 保持不變) ...
