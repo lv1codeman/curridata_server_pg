@@ -1,6 +1,6 @@
 fastapi
 uvicorn
-sachem
+sqlalchemy
 psycopg2-binary
 aiofiles
 yt-dlp
