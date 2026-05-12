@@ -105,14 +105,17 @@ def user_login(request: LoginRequest):
     sql = """
         SELECT name, auth
         FROM members
-        WHERE account = %s AND pwd = %s
+        WHERE account = :account AND pwd = :pwd
         LIMIT 1
     """
 
     try:
         user_data = execute_query(
             sql,
-            (request.username, request.password),
+            {
+                "account": request.username,
+                "pwd": request.password
+            },
             fetch_one=True
         )
     except Exception as e:
