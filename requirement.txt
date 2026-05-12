@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+sachem
+psycopg2-binary
+aiofiles
+yt-dlp

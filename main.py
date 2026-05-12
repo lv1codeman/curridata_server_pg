@@ -1,5 +1,5 @@
 # 引入您提供的 MSSQL 資料庫輔助函數和例外
-from database_helper import execute_query, DatabaseError, UniqueConstraintError, DatabaseCursor
+from database_helper_pg import execute_query, DatabaseError, UniqueConstraintError, DatabaseCursor
 import time
 import tempfile
 import os
@@ -147,7 +147,7 @@ app.add_middleware(ClientIPMiddleware)
 class LoginRequest(BaseModel):
     username: str 
     password: str
-# ... (DownloadRequest, Dept, DeptWithAgent, CAgent, MAP_CLS_DEPT 保持不變) ...
+# ... (DownloadRequest, Dept, DeptWithAgent, CAgent, map_cls_dept 保持不變) ...
 # YT下載請求模型
 class DownloadRequest(BaseModel):
     """定義客戶端傳入的請求體結構"""
@@ -177,43 +177,9 @@ class CAgent(BaseModel):
     EMAIL: str
 
 # 班級-系所簡稱對照表模型
-class MAP_CLS_DEPT(BaseModel):
+class map_cls_dept(BaseModel):
     CLASS: str
     DEPT_S: str
-
-
-# --- 資料庫初始化函式 (確保 YT_DOWNLOAD_JOBS 表存在) ---
-# ... (initialize_database 保持不變) ...
-def initialize_database():
-    # print("檢查並初始化 YT_DOWNLOAD_JOBS 表...")
-    # SQL Server specific syntax
-    # 注意: final_filepath 設為 NVARCHAR(255) 應足夠容納臨時路徑
-    sql = """
-    IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='YT_DOWNLOAD_JOBS' and xtype='U')
-    CREATE TABLE YT_DOWNLOAD_JOBS (
-        ID INT IDENTITY(1,1) PRIMARY KEY,
-        job_id NVARCHAR(50) UNIQUE NOT NULL,
-        client_ip NVARCHAR(50),
-        url NVARCHAR(2048) NOT NULL,
-        format NVARCHAR(10) NOT NULL,
-        status NVARCHAR(20) NOT NULL, -- PENDING, PROCESSING, COMPLETED, FAILED
-        progress INT NOT NULL DEFAULT 0,
-        final_filepath NVARCHAR(255),
-        start_time DATETIME,
-        end_time DATETIME,
-        created_at DATETIME DEFAULT GETDATE()
-    );
-    """
-    try:
-        # 使用同步執行
-        execute_query(sql)
-        # print("YT_DOWNLOAD_JOBS 表格準備就緒。")
-    except Exception as e:
-        # 這裡不應中斷應用程式，但必須警告使用者
-        print(f"⚠️ 無法初始化 YT_DOWNLOAD_JOBS 表格，輪詢功能將無法運作: {e}")
-
-# 在應用程式啟動時執行資料庫初始化
-initialize_database()
 
 # --- 輪詢架構的背景任務執行函式 ---
 # ... (download_and_update_db 保持不變) ...
@@ -249,7 +215,7 @@ def download_and_update_db(job_id: str, url: str, target_format: str):
             
             # 寫入資料庫 (同步執行)
             execute_query(
-                "UPDATE YT_DOWNLOAD_JOBS SET status=?, progress=? WHERE job_id=?", 
+                "UPDATE yt_download_jobs SET status=%s, progress=%s WHERE job_id=%s", 
                 (current_status, progress_percent, job_id)
             )
 
@@ -259,7 +225,7 @@ def download_and_update_db(job_id: str, url: str, target_format: str):
     # 2. 主要下載邏輯
     try:
         # 更新狀態為 PROCESSING (進度 10%) (同步執行)
-        execute_query("UPDATE YT_DOWNLOAD_JOBS SET status='PROCESSING', start_time=GETDATE(), progress=10 WHERE job_id=?", (job_id,))
+        execute_query("UPDATE yt_download_jobs SET status='PROCESSING', start_time=NOW(), progress=10 WHERE job_id=%s", (job_id,))
         
         # 根據目標格式設定 yt-dlp 選項
         if target_format == 'mp3':
@@ -336,7 +302,7 @@ def download_and_update_db(job_id: str, url: str, target_format: str):
         # 成功完成後更新資料庫 (同步執行)
         # 這裡將使用正確的 final_filepath 存入資料庫
         execute_query(
-            "UPDATE YT_DOWNLOAD_JOBS SET status='COMPLETED', progress=100, final_filepath=?, end_time=GETDATE() WHERE job_id=?", 
+            "UPDATE yt_download_jobs SET status='COMPLETED', progress=100, final_filepath=%s, end_time=NOW() WHERE job_id=%s", 
             (final_filepath, job_id)
         )
         print(f"✅ Job {job_id} 成功完成。檔案: {final_filepath}")
@@ -345,7 +311,7 @@ def download_and_update_db(job_id: str, url: str, target_format: str):
         # 失敗時更新資料庫狀態 (同步執行)
         error_message = f"下載失敗: {str(e)}"
         execute_query(
-            "UPDATE YT_DOWNLOAD_JOBS SET status='FAILED', progress=0, end_time=GETDATE(), final_filepath='ERROR' WHERE job_id=?", 
+            "UPDATE yt_download_jobs SET status='FAILED', progress=0, end_time=NOW(), final_filepath='ERROR' WHERE job_id=%s", 
             (job_id,)
         )
         print(f"❌ Job {job_id} 失敗: {error_message}")
@@ -500,7 +466,7 @@ async def post_test(item: DownloadRequest):
     
     return "post成功囉"
 
-# --- DEPTS ---
+# --- depts ---
 # 1. 讀取系所表(含承辦人及課務組承辦人資料)
 # ... (get_depts 保持不變) ...
 @app.get("/get_depts", summary="讀取所有系所資料及承辦人資訊")
@@ -512,16 +478,16 @@ SELECT
     AGENT_NAME, AGENT_EXT, AGENT_EMAIL,
     ca.ID as CAGENT_ID, ca.NAME as CAGENT_NAME, ca.EXT as CAGENT_EXT, ca.EMAIL as CAGENT_EMAIL
 FROM
-    DEPTS AS d
+    depts AS d
 LEFT JOIN
-    CAGENTS AS ca ON d.CAGENT_ID = ca.ID;
+    cagents AS ca ON d.CAGENT_ID = ca.ID;
 """
         data = await asyncio.to_thread(execute_query, sql)
         return data
     except DatabaseError as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch departments: {e}")
 
-# 2. 新增系所到DEPTS(含承辦人及課務組承辦人資料)
+# 2. 新增系所到depts(含承辦人及課務組承辦人資料)
 # ... (create_dept 保持不變) ...
 @app.post("/create_dept", summary="新增系所資料")
 async def create_dept(item: DeptWithAgent):
@@ -529,8 +495,8 @@ async def create_dept(item: DeptWithAgent):
     建立新的系所資料，使用標準 INSERT 語句，不回傳 ID。
     """
     sql = """
-        INSERT INTO DEPTS (COLLEGE, COLLEGE_S, DEPT, DEPT_S, STYPE, AGENT_NAME, AGENT_EXT, AGENT_EMAIL, CAGENT_ID)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+        INSERT INTO depts (COLLEGE, COLLEGE_S, DEPT, DEPT_S, STYPE, AGENT_NAME, AGENT_EXT, AGENT_EMAIL, CAGENT_ID)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
     """
     values = (item.COLLEGE, item.COLLEGE_S, item.DEPT, item.DEPT_S, item.STYPE, item.AGENT_NAME, item.AGENT_EXT, item.AGENT_EMAIL, item.CAGENT_ID)
     
@@ -548,9 +514,9 @@ async def create_dept(item: DeptWithAgent):
 @app.put("/update_dept/{dept_id}", summary="修改指定 ID 的系所資料")
 async def update_dept(dept_id: int, item: DeptWithAgent):
     sql = """
-        UPDATE DEPTS SET
-        COLLEGE = ?, COLLEGE_S = ?, DEPT = ?, DEPT_S = ?, STYPE = ?, AGENT_NAME = ?, AGENT_EXT = ?, AGENT_EMAIL = ?, CAGENT_ID = ?
-        WHERE ID = ?
+        UPDATE depts SET
+        COLLEGE = %s, COLLEGE_S = %s, DEPT = %s, DEPT_S = %s, STYPE = %s, AGENT_NAME = %s, AGENT_EXT = %s, AGENT_EMAIL = %s, CAGENT_ID = %s
+        WHERE ID = %s
     """
     values = (item.COLLEGE, item.COLLEGE_S, item.DEPT, item.DEPT_S, item.STYPE, item.AGENT_NAME, item.AGENT_EXT, item.AGENT_EMAIL, item.CAGENT_ID, dept_id)
     try:
@@ -570,32 +536,32 @@ async def update_dept(dept_id: int, item: DeptWithAgent):
 async def delete_dept(dept_id: int):
     try:
         # 確保參數以 tuple 形式傳遞
-        result = await asyncio.to_thread(execute_query, "DELETE FROM DEPTS WHERE ID = ?", (dept_id,))
+        result = await asyncio.to_thread(execute_query, "DELETE FROM depts WHERE ID = %s", (dept_id,))
         if result == 0:
             raise HTTPException(status_code=404, detail=f"Department with ID {dept_id} not found.")
         return {"message": "Department deleted successfully."}
     except DatabaseError as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete department: {e}")
 
-# --- CAGENTS ---
+# --- cagents ---
 # 5. 查詢課務組承辦人資料
 # ... (get_cagents 保持不變) ...
 @app.get("/get_cagents", summary="查詢所有課務組承辦人資料")
 async def get_cagents():
     try:
-        sql = "SELECT * FROM CAGENTS"
+        sql = "SELECT * FROM cagents"
         data = await asyncio.to_thread(execute_query, sql)
         return data
     except DatabaseError as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch C Agents: {e}")
 
-# 6. 新增課務組承辦人CAGENTS (使用 CAgent)
+# 6. 新增課務組承辦人cagents (使用 CAgent)
 # ... (create_cagent 保持不變) ...
 @app.post("/create_cagent", summary="新增課務組承辦人資料")
 async def create_cagent(item: CAgent):
     sql = """
-        INSERT INTO CAGENTS (NAME, EXT, EMAIL)
-        VALUES (?, ?, ?);
+        INSERT INTO cagents (NAME, EXT, EMAIL)
+        VALUES (%s, %s, %s);
     """
     values = (item.NAME, item.EXT, item.EMAIL)
     
@@ -613,9 +579,9 @@ async def create_cagent(item: CAgent):
 @app.put("/update_cagent/{cagent_id}", summary="修改指定 ID 的課務組承辦人資料")
 async def update_cagent(cagent_id: int, item: CAgent):
     sql = """
-        UPDATE CAGENTS SET
-        NAME = ?, EXT = ?, EMAIL = ?
-        WHERE ID = ?
+        UPDATE cagents SET
+        NAME = %s, EXT = %s, EMAIL = %s
+        WHERE ID = %s
     """
     values = (item.NAME, item.EXT, item.EMAIL, cagent_id)
     try:
@@ -633,7 +599,7 @@ async def update_cagent(cagent_id: int, item: CAgent):
 @app.delete("/delete_cagent/{cagent_id}", summary="刪除指定 ID 的課務組承辦人資料")
 async def delete_cagent(cagent_id: int):
     try:
-        result = await asyncio.to_thread(execute_query, "DELETE FROM CAGENTS WHERE ID = ?", (cagent_id,))
+        result = await asyncio.to_thread(execute_query, "DELETE FROM cagents WHERE ID = %s", (cagent_id,))
         if result == 0:
             raise HTTPException(status_code=404, detail=f"Curri agent with ID {cagent_id} not found.")
         return {"message": "Curri agent deleted successfully."}
@@ -651,13 +617,13 @@ async def get_all_data():
     except DatabaseError as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch all data from stored procedure: {e}")
 
-# --- MAP_CLS_DEPT ---
+# --- map_cls_dept ---
 # 10. 查詢班級-系所簡稱對照表
 # ... (get_map_cls_dept 保持不變) ...
 @app.get("/get_map_cls_dept", summary="查詢所有班級-系所簡稱對照資料")
 async def get_map_cls_dept():
     try:
-        sql = "SELECT * FROM MAP_CLS_DEPT"
+        sql = "SELECT * FROM map_cls_dept"
         data = await asyncio.to_thread(execute_query, sql)
         return data
     except DatabaseError as e:
@@ -666,10 +632,10 @@ async def get_map_cls_dept():
 # 11. 新增班級-系所簡稱
 # ... (create_map_cls_dept 保持不變) ...
 @app.post("/create_map_cls_dept", summary="新增班級-系所簡稱對照")
-async def create_map_cls_dept(item: MAP_CLS_DEPT):
+async def create_map_cls_dept(item: map_cls_dept):
     sql = """
-        INSERT INTO MAP_CLS_DEPT (CLASS, DEPT_S)
-        VALUES (?, ?);
+        INSERT INTO map_cls_dept (CLASS, DEPT_S)
+        VALUES (%s, %s);
     """
     values = (item.CLASS, item.DEPT_S)
     
@@ -685,11 +651,11 @@ async def create_map_cls_dept(item: MAP_CLS_DEPT):
 # 12. 修改班級-系所簡稱
 # ... (update_map_cls_dept 保持不變) ...
 @app.put("/update_map_cls_dept/{map_cls_dept_id}", summary="修改指定 ID 的班級-系所簡稱對照")
-async def update_map_cls_dept(map_cls_dept_id: int, item: MAP_CLS_DEPT): # 修正：這裡的 MAP_CLS_CLS_DEPT 應該是 MAP_CLS_DEPT
+async def update_map_cls_dept(map_cls_dept_id: int, item: map_cls_dept): # 修正：這裡的 MAP_CLS_CLS_DEPT 應該是 map_cls_dept
     sql = """
-        UPDATE MAP_CLS_DEPT SET
-        CLASS = ?, DEPT_S = ?
-        WHERE ID = ?
+        UPDATE map_cls_dept SET
+        CLASS = %s, DEPT_S = %s
+        WHERE ID = %s
     """
     values = (item.CLASS, item.DEPT_S, map_cls_dept_id)
     try:
@@ -707,7 +673,7 @@ async def update_map_cls_dept(map_cls_dept_id: int, item: MAP_CLS_DEPT): # 修�
 @app.delete("/delete_map_cls_dept/{map_cls_dept_id}", summary="刪除指定 ID 的班級-系所簡稱對照")
 async def delete_map_cls_dept(map_cls_dept_id: int):
     try:
-        result = await asyncio.to_thread(execute_query, "DELETE FROM MAP_CLS_DEPT WHERE ID = ?", (map_cls_dept_id,))
+        result = await asyncio.to_thread(execute_query, "DELETE FROM map_cls_dept WHERE ID = %s", (map_cls_dept_id,))
         if result == 0:
             raise HTTPException(status_code=404, detail=f"Class-dept_short with ID {map_cls_dept_id} not found.")
         return {"message": "class-dept_short deleted successfully."}
@@ -729,8 +695,8 @@ async def submit_download_job(request: DownloadRequest, background_tasks: Backgr
     try:
         # 1. 記錄初始任務狀態到資料庫 (Status: PENDING)
         insert_sql = """
-            INSERT INTO YT_DOWNLOAD_JOBS (job_id, client_ip, url, format, status, progress)
-            VALUES (?, ?, ?, ?, 'PENDING', 0);
+            INSERT INTO yt_download_jobs (job_id, client_ip, url, format, status, progress)
+            VALUES (%s, %s, %s, %s, 'PENDING', 0);
         """
         # 使用 asyncio.to_thread 確保 execute_query 在單獨的執行緒中執行
         await asyncio.to_thread(execute_query, insert_sql, (job_id, client_ip, request.url, request.format))
@@ -750,7 +716,7 @@ async def get_download_status(job_id: str):
     返回: status (PENDING/PROCESSING/COMPLETED/FAILED), progress (0-100)
     """
     try:
-        sql = "SELECT status, progress FROM YT_DOWNLOAD_JOBS WHERE job_id = ?"
+        sql = "SELECT status, progress FROM yt_download_jobs WHERE job_id = %s"
         
         # 使用 fetch_one=True，預期返回字典或 None
         data = await asyncio.to_thread(execute_query, sql, (job_id,), fetch_one=True)
@@ -772,7 +738,7 @@ async def get_download_status(job_id: str):
 @app.get("/download_file/{job_id}", summary="獲取最終下載文件 (非同步輪詢第三步)")
 async def download_file(job_id: str):
     
-    sql_query = "SELECT final_filepath, status FROM YT_DOWNLOAD_JOBS WHERE job_id = ?"
+    sql_query = "SELECT final_filepath, status FROM yt_download_jobs WHERE job_id = %s"
     
     # 使用 fetch_one=True，預期返回字典
     job_details: Optional[Dict[str, Any]] = await asyncio.to_thread(execute_query, sql_query, (job_id,), fetch_one=True)
@@ -826,15 +792,15 @@ async def download_file(job_id: str):
     )
 
 
-# 17. 查詢 MEMBERS 表所有資料
-@app.get("/api/members", summary="查詢 MEMBERS 表所有資料")
+# 17. 查詢 members 表所有資料
+@app.get("/api/members", summary="查詢 members 表所有資料")
 async def get_members():
     """
-    從 MEMBERS 表中讀取所有欄位資料，並以 JSON 格式回傳給客戶端。
+    從 members 表中讀取所有欄位資料，並以 JSON 格式回傳給客戶端。
     """
     try:
-        # 假設您的 MEMBERS 表已經存在
-        sql = "SELECT * FROM MEMBERS"
+        # 假設您的 members 表已經存在
+        sql = "SELECT * FROM members"
         
         # 由於 execute_query 是同步函數，我們使用 asyncio.to_thread 確保它不會阻塞 FastAPI 的主事件迴圈
         data = await asyncio.to_thread(execute_query, sql)
@@ -844,11 +810,11 @@ async def get_members():
         
     except DatabaseError as e:
         # 如果發生任何資料庫錯誤 (例如表不存在、連線問題等)
-        print(f"❌ 查詢 MEMBERS 表失敗: {e}")
-        raise HTTPException(status_code=500, detail=f"伺服器錯誤: 無法查詢 MEMBERS 表資料。")
+        print(f"❌ 查詢 members 表失敗: {e}")
+        raise HTTPException(status_code=500, detail=f"伺服器錯誤: 無法查詢 members 表資料。")
     except Exception as e:
         # 捕捉其他未預期的錯誤
-        print(f"❌ 查詢 MEMBERS 表發生未知錯誤: {e}")
+        print(f"❌ 查詢 members 表發生未知錯誤: {e}")
         raise HTTPException(status_code=500, detail=f"伺服器錯誤: {e}")
 
 # ... (在 get_members 之前或之後新增)
@@ -857,14 +823,14 @@ async def get_members():
 @app.post("/api/user_login", summary="使用者登入 (根據 ACCOUNT 及 PWD 驗證)")
 async def user_login(request: LoginRequest):
     """
-    根據傳入的帳號 (對應 MEMBERS.ACCOUNT) 和密碼 (對應 MEMBERS.PWD) 驗證使用者身份，
+    根據傳入的帳號 (對應 members.ACCOUNT) 和密碼 (對應 members.PWD) 驗證使用者身份，
     並回傳使用者的 NAME 和 AUTH 權限資訊。
     注意：此處僅為示範，實際應用需加密比對密碼。
     """
     try:
         # 🎯 關鍵修改：SQL 使用 ACCOUNT 和 PWD 欄位進行驗證
         # 回傳欄位為 NAME 和 AUTH
-        sql = "SELECT NAME, AUTH FROM MEMBERS WHERE ACCOUNT = ? AND PWD = ?"
+        sql = "SELECT NAME, AUTH FROM members WHERE ACCOUNT = %s AND PWD = %s"
         
         # 由於前端傳入的 key 是 username 和 password，我們將其對應到 ACCOUNT 和 PWD
         user_data = await asyncio.to_thread(
