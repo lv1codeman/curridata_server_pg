@@ -1,8 +1,10 @@
 # region 宣告import 
 from database_helper_pg import execute_query, DatabaseError, UniqueConstraintError, DatabaseCursor
+
 import time
 import tempfile
 import os
+from dotenv import load_dotenv
 import shutil
 import uuid
 
@@ -11,10 +13,11 @@ import json
 # 修正點：引入 asyncio 
 import asyncio
 from fastapi.responses import FileResponse
-# 修正點：引入 File, UploadFile 來處理檔案上傳
-from fastapi import FastAPI, HTTPException, Request, Response, Body, BackgroundTasks, File, UploadFile, Form
+from fastapi import FastAPI, HTTPException, Request, Response, Body, BackgroundTasks, File, UploadFile, Form, Depends
+from fastapi.security import HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from jose import jwt, JWTError
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.types import ASGIApp
 from starlette.responses import FileResponse
@@ -32,6 +35,8 @@ from yt_dlp.utils import DownloadError
 
 # endregion
 
+load_dotenv() # 讀取環境變數
+
 # region 初始化 FastAPI 應用 
 app = FastAPI(title="Curri Data API")
 app.add_middleware(
@@ -47,6 +52,12 @@ app.add_middleware(
 class LoginRequest(BaseModel):
     username: str 
     password: str
+
+class Member(BaseModel):
+    account: str
+    pwd: str
+    name: str
+    auth: str
 
 # YT下載請求模型
 class DownloadRequest(BaseModel):
@@ -77,9 +88,13 @@ class CAgent(BaseModel):
     email: str
 
 # 班級-系所簡稱對照表模型
-class map_cls_dept(BaseModel):
+
+class MapClsDept(BaseModel):
     cls: str = Field(alias="class")
     dept_s: str
+
+    class Config:
+        populate_by_name = True
 
 # endregion
 
@@ -99,43 +114,220 @@ async def post_test(item: DownloadRequest):
     return "post成功囉"
 #endregion
 
-# region [API] 使用者登入 驗證帳號密碼 
-@app.post("/api/user_login", summary="使用者登入 (依 account / pwd 驗證)")
+# region (舊版 暫不使用) [API] 使用者登入 驗證帳號密碼 
+# @app.post("/api/user_login", summary="使用者登入 (依 account / pwd 驗證)")
+# def user_login(request: LoginRequest):
+
+#     sql = """
+#         SELECT name, auth
+#         FROM members
+#         WHERE account = :account AND pwd = :pwd
+#         LIMIT 1
+#     """
+
+#     try:
+#         user_data = execute_query(
+#             sql,
+#             {
+#                 "account": request.username,
+#                 "pwd": request.password
+#             },
+#             fetch_one=True
+#         )
+#     except Exception as e:
+#         print(f"❌ 登入查詢資料庫失敗: {e}")
+#         raise HTTPException(status_code=500, detail="伺服器錯誤: 資料庫連線失敗")
+
+#     if not user_data:
+#         print(f"request.username=",request.username)
+#         print(f"request.password=",request.password)
+#         raise HTTPException(status_code=401, detail="帳號或密碼錯誤")
+
+#     return {
+#         "message": "登入成功",
+#         "user": {
+#             "name": user_data["name"],
+#             "auth": user_data["auth"],
+#             "username": request.username
+#         }
+#     }
+# endregion
+
+
+# region 使用者登入
+@app.post("/api/user_login")
 def user_login(request: LoginRequest):
 
     sql = """
-        SELECT name, auth
+        SELECT id, account, pwd, name, auth
         FROM members
-        WHERE account = :account AND pwd = :pwd
+        WHERE account = :account
         LIMIT 1
     """
+    
+    user = execute_query(sql, {"account": request.username}, fetch_one=True)
 
-    try:
-        user_data = execute_query(
-            sql,
-            {
-                "account": request.username,
-                "pwd": request.password
-            },
-            fetch_one=True
-        )
-    except Exception as e:
-        print(f"❌ 登入查詢資料庫失敗: {e}")
-        raise HTTPException(status_code=500, detail="伺服器錯誤: 資料庫連線失敗")
+    if not user:
+        raise HTTPException(401, "帳號錯誤")
 
-    if not user_data:
-        print(f"request.username=",request.username)
-        print(f"request.password=",request.password)
-        raise HTTPException(status_code=401, detail="帳號或密碼錯誤")
+    # ✅ 明碼比對
+    if request.password != user["pwd"]:
+        raise HTTPException(401, "密碼錯誤")
 
+    # ✅ ✅ ✅ 🔥 這裡加入 JWT（關鍵）
+    token = create_access_token({
+        "user_id": user["id"],
+        "account": user["account"],
+        "auth": user["auth"]
+    })
+
+    # ✅ 回傳 token + user
     return {
-        "message": "登入成功",
+        "access_token": token,
+        "token_type": "bearer",
         "user": {
-            "name": user_data["name"],
-            "auth": user_data["auth"],
-            "username": request.username
+            "id": user["id"],
+            "name": user["name"],
+            "auth": user["auth"]
         }
     }
+
+# endregion
+
+# region JWT 設定 
+
+import os
+from dotenv import load_dotenv
+from jose import jwt, JWTError
+from fastapi.security import HTTPBearer
+from fastapi import Depends, HTTPException
+from datetime import datetime, timedelta
+
+load_dotenv()
+
+SECRET_KEY = os.getenv("SECRET_KEY")
+
+if not SECRET_KEY:
+    raise ValueError("❌ SECRET_KEY 未設定")
+
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
+
+security = HTTPBearer()
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def verify_token(token=Depends(security)):
+    if not token:
+        raise HTTPException(status_code=403, detail="未提供登入憑證")
+
+    try:
+        payload = jwt.decode(token.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+
+    except JWTError:
+        raise HTTPException(status_code=403, detail="Token 無效或過期")
+
+# endregion
+
+
+# region MEMBERS - GET 
+
+@app.get("/get_members", summary="查詢所有使用者")
+def get_members(user=Depends(verify_token)):
+    try:
+        sql = """
+            SELECT id, account, name, auth
+            FROM members
+            ORDER BY id
+        """
+        return execute_query(sql)
+
+    except DatabaseError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch members: {e}")
+
+# endregion
+
+# region MEMBERS - CREATE 
+
+@app.post("/create_member", summary="新增使用者")
+def create_member(item: Member, user=Depends(verify_token)):
+
+    sql = """
+        INSERT INTO members (account, pwd, name, auth)
+        VALUES (:account, :pwd, :name, :auth)
+    """
+
+    params = {
+        "account": item.account.strip(),
+        "pwd": item.pwd.strip(),  # ✅ 明碼存
+        "name": item.name.strip(),
+        "auth": item.auth.strip()
+    }
+
+    try:
+        execute_query(sql, params)
+        return {"message": "Member created successfully"}
+
+    except UniqueConstraintError:
+        raise HTTPException(409, "帳號已存在")
+
+# endregion
+
+# region MEMBERS - UPDATE 
+
+@app.put("/update_member/{id}", summary="修改使用者")
+def update_member(id: int, item: Member, user=Depends(verify_token)):
+
+    sql = """
+        UPDATE members
+        SET account = :account,
+            pwd = :pwd,
+            name = :name,
+            auth = :auth
+        WHERE id = :id
+    """
+
+    params = {
+        "id": id,
+        "account": item.account.strip(),
+        "pwd": item.pwd.strip(),
+        "name": item.name.strip(),
+        "auth": item.auth.strip()
+    }
+
+    result = execute_query(sql, params)
+
+    if result == 0:
+        raise HTTPException(404, "Member not found")
+
+    return {"message": "Member updated successfully"}
+
+
+# endregion
+
+# region MEMBERS - DELETE 
+
+@app.delete("/delete_member/{id}", summary="刪除使用者")
+def delete_member(id: int, user=Depends(verify_token)):
+
+    sql = """
+        DELETE FROM members WHERE id = :id
+    """
+
+    result = execute_query(sql, {"id": id})
+
+    if result == 0:
+        raise HTTPException(404, "Member not found")
+
+    return {"message": "Member deleted successfully"}
+
 # endregion
 
 # region depts - GET 
@@ -298,7 +490,7 @@ def get_cagents():
 
 # endregion
 
-# region cagents - CREATE
+# region cagents - CREATE 
 
 @app.post("/create_cagent", summary="新增課務組承辦人資料")
 def create_cagent(item: CAgent):
@@ -325,7 +517,7 @@ def create_cagent(item: CAgent):
 
 # endregion
 
-# region cagents - UPDATE
+# region cagents - UPDATE 
 
 @app.put("/update_cagent/{cagent_id}", summary="修改指定 ID 的課務組承辦人資料")
 def update_cagent(cagent_id: int, item: CAgent):
@@ -360,7 +552,7 @@ def update_cagent(cagent_id: int, item: CAgent):
 
 # endregion
 
-# region cagents - DELETE
+# region cagents - DELETE 
 
 @app.delete("/delete_cagent/{cagent_id}", summary="刪除指定 ID 的課務組承辦人資料")
 def delete_cagent(cagent_id: int):
@@ -383,13 +575,108 @@ def delete_cagent(cagent_id: int):
 
 # endregion
 
+# region map_cls_dept - GET 
 
+@app.get("/get_map_cls_dept", summary="查詢所有班級-系所簡稱對照資料")
+def get_map_cls_dept():
+    try:
+        sql = """
+            SELECT
+                id,
+                class AS cls,
+                dept_s
+            FROM map_cls_dept
+            ORDER BY id
+        """
+        return execute_query(sql)
 
+    except DatabaseError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch class-dept mapping: {e}")
 
+# endregion
 
+# region map_cls_dept - CREATE 
 
+@app.post("/create_map_cls_dept", summary="新增班級-系所簡稱對照")
+def create_map_cls_dept(item: MapClsDept):
 
+    sql = """
+        INSERT INTO map_cls_dept (class, dept_s)
+        VALUES (:class, :dept_s)
+    """
 
+    params = {
+        "class": item.cls.strip(),   # ⚠️ cls → class mapping
+        "dept_s": item.dept_s.strip()
+    }
+
+    try:
+        execute_query(sql, params)
+        return {"message": "Class-dept mapping added successfully."}
+
+    except UniqueConstraintError:
+        raise HTTPException(status_code=409, detail="班級與系所簡稱已存在")
+    except DatabaseError as e:
+        raise HTTPException(status_code=500, detail=f"資料庫錯誤: {e}")
+
+# endregion
+
+# region map_cls_dept - UPDATE 
+
+@app.put("/update_map_cls_dept/{map_cls_dept_id}", summary="修改指定 ID 的班級-系所簡稱對照")
+def update_map_cls_dept(map_cls_dept_id: int, item: MapClsDept):
+
+    sql = """
+        UPDATE map_cls_dept
+        SET
+            class = :class,
+            dept_s = :dept_s
+        WHERE id = :id
+    """
+
+    params = {
+        "class": item.cls.strip(),
+        "dept_s": item.dept_s.strip(),
+        "id": map_cls_dept_id
+    }
+
+    try:
+        result = execute_query(sql, params)
+
+        if result == 0:
+            raise HTTPException(status_code=404, detail=f"Mapping with ID {map_cls_dept_id} not found.")
+
+        return {"message": "Class-dept mapping updated successfully."}
+
+    except UniqueConstraintError:
+        raise HTTPException(status_code=409, detail="唯一約束衝突")
+    except DatabaseError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update mapping: {e}")
+
+# endregion
+
+# region map_cls_dept - DELETE 
+
+@app.delete("/delete_map_cls_dept/{map_cls_dept_id}", summary="刪除指定 ID 的班級-系所簡稱對照")
+def delete_map_cls_dept(map_cls_dept_id: int):
+
+    sql = """
+        DELETE FROM map_cls_dept
+        WHERE id = :id
+    """
+
+    try:
+        result = execute_query(sql, {"id": map_cls_dept_id})
+
+        if result == 0:
+            raise HTTPException(status_code=404, detail=f"Mapping with ID {map_cls_dept_id} not found.")
+
+        return {"message": "Class-dept mapping deleted successfully."}
+
+    except DatabaseError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete mapping: {e}")
+
+# endregion
 
 
 

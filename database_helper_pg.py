@@ -7,6 +7,9 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.engine import Engine, Connection
 
+from dotenv import load_dotenv
+load_dotenv()
+
 # =========================
 # 自訂例外（保留你原本設計）
 # =========================

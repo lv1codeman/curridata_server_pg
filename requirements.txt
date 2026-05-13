@@ -4,3 +4,4 @@ sqlalchemy
 psycopg2-binary
 aiofiles
 yt-dlp
+python-jose[cryptography]
