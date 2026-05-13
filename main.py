@@ -138,28 +138,148 @@ def user_login(request: LoginRequest):
     }
 # endregion
 
-# region [API] depts表相關 
-# 1. 讀取系所表(含承辦人及課務組承辦人資料)
+# region depts - GET 
+
 @app.get("/get_depts", summary="讀取所有系所資料及承辦人資訊")
-async def get_depts():
+def get_depts():
     try:
         sql = """
-SELECT
-    d.id, college, college_s, dept, dept_s, stype, 
-    agent_name, agent_ext, agent_email,
-    ca.id as cagent_id, ca.name as cagent_name, ca.ext as cagent_ext, ca.email as cagent_email
-FROM
-    depts AS d
-LEFT JOIN
-    cagents AS ca ON d.cagent_id = ca.id;
-"""
-        data = await asyncio.to_thread(execute_query, sql)
-        return data
+        SELECT
+            d.id,
+            d.college,
+            d.college_s,
+            d.dept,
+            d.dept_s,
+            d.stype,
+            d.agent_name,
+            d.agent_ext,
+            d.agent_email,
+            ca.id AS cagent_id,
+            ca.name AS cagent_name,
+            ca.ext AS cagent_ext,
+            ca.email AS cagent_email
+        FROM depts d
+        LEFT JOIN cagents ca ON d.cagent_id = ca.id
+        ORDER BY d.id
+        """
+        return execute_query(sql)
+
     except DatabaseError as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch departments: {e}")
+
 # endregion
 
-# region CAGENTS - GET 
+# region depts - CREATE 
+
+@app.post("/create_dept", summary="新增系所資料")
+def create_dept(item: DeptWithAgent):
+
+    sql = """
+        INSERT INTO depts (
+            college, college_s, dept, dept_s, stype,
+            agent_name, agent_ext, agent_email, cagent_id
+        )
+        VALUES (
+            :college, :college_s, :dept, :dept_s, :stype,
+            :agent_name, :agent_ext, :agent_email, :cagent_id
+        )
+    """
+
+    params = {
+        "college": item.college.strip(),
+        "college_s": item.college_s.strip(),
+        "dept": item.dept.strip(),
+        "dept_s": item.dept_s.strip(),
+        "stype": item.stype.strip(),
+        "agent_name": item.agent_name.strip(),
+        "agent_ext": item.agent_ext.strip(),
+        "agent_email": item.agent_email.strip(),
+        "cagent_id": item.cagent_id
+    }
+
+    try:
+        execute_query(sql, params)
+        return {"message": "Department added successfully."}
+
+    except UniqueConstraintError:
+        raise HTTPException(status_code=409, detail="系所名稱或簡稱已存在")
+    except DatabaseError as e:
+        raise HTTPException(status_code=500, detail=f"資料庫錯誤: {e}")
+
+# endregion
+
+# region depts - UPDATE 
+
+@app.put("/update_dept/{dept_id}", summary="修改指定 ID 的系所資料")
+def update_dept(dept_id: int, item: DeptWithAgent):
+
+    sql = """
+        UPDATE depts
+        SET
+            college = :college,
+            college_s = :college_s,
+            dept = :dept,
+            dept_s = :dept_s,
+            stype = :stype,
+            agent_name = :agent_name,
+            agent_ext = :agent_ext,
+            agent_email = :agent_email,
+            cagent_id = :cagent_id
+        WHERE id = :id
+    """
+
+    params = {
+        "college": item.college.strip(),
+        "college_s": item.college_s.strip(),
+        "dept": item.dept.strip(),
+        "dept_s": item.dept_s.strip(),
+        "stype": item.stype.strip(),
+        "agent_name": item.agent_name.strip(),
+        "agent_ext": item.agent_ext.strip(),
+        "agent_email": item.agent_email.strip(),
+        "cagent_id": item.cagent_id,
+        "id": dept_id
+    }
+
+    try:
+        result = execute_query(sql, params)
+
+        if result == 0:
+            raise HTTPException(status_code=404, detail=f"Department with ID {dept_id} not found.")
+
+        return {"message": "Department updated successfully."}
+
+    except UniqueConstraintError:
+        raise HTTPException(status_code=409, detail="唯一約束衝突")
+    except DatabaseError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update department: {e}")
+
+# endregion
+
+# region depts - DELETE 
+
+@app.delete("/delete_dept/{dept_id}", summary="刪除指定 ID 的系所資料")
+def delete_dept(dept_id: int):
+
+    sql = """
+        DELETE FROM depts
+        WHERE id = :id
+    """
+
+    try:
+        result = execute_query(sql, {"id": dept_id})
+
+        if result == 0:
+            raise HTTPException(status_code=404, detail=f"Department with ID {dept_id} not found.")
+
+        return {"message": "Department deleted successfully."}
+
+    except DatabaseError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete department: {e}")
+
+# endregion
+
+# region cagents - GET 
 
 @app.get("/get_cagents", summary="查詢所有課務組承辦人資料")
 def get_cagents():
@@ -178,7 +298,7 @@ def get_cagents():
 
 # endregion
 
-# region CAGENTS - CREATE
+# region cagents - CREATE
 
 @app.post("/create_cagent", summary="新增課務組承辦人資料")
 def create_cagent(item: CAgent):
@@ -205,7 +325,7 @@ def create_cagent(item: CAgent):
 
 # endregion
 
-# region CAGENTS - UPDATE
+# region cagents - UPDATE
 
 @app.put("/update_cagent/{cagent_id}", summary="修改指定 ID 的課務組承辦人資料")
 def update_cagent(cagent_id: int, item: CAgent):
@@ -240,7 +360,7 @@ def update_cagent(cagent_id: int, item: CAgent):
 
 # endregion
 
-# region CAGENTS - DELETE
+# region cagents - DELETE
 
 @app.delete("/delete_cagent/{cagent_id}", summary="刪除指定 ID 的課務組承辦人資料")
 def delete_cagent(cagent_id: int):
