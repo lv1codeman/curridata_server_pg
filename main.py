@@ -77,7 +77,7 @@ class CAgent(BaseModel):
 
 # 班級-系所簡稱對照表模型
 class map_cls_dept(BaseModel):
-    class: str
+    cls: str = Field(alias="class")
     dept_s: str
 
 # endregion
