@@ -56,29 +56,29 @@ class DownloadRequest(BaseModel):
 
 # 基礎系所資訊
 class Dept(BaseModel):
-    COLLEGE: str
-    COLLEGE_S: str
-    DEPT: str
-    DEPT_S: str
-    STYPE: str
-    CAGENT_ID: int
+    college: str
+    college_s: str
+    dept: str
+    dept_s: str
+    stype: str
+    cagent_id: int
 
 # 新增系所及更新系所使用的模型：繼承自 Dept
 class DeptWithAgent(Dept):
-    AGENT_NAME: str
-    AGENT_EXT: str
-    AGENT_EMAIL: str
+    agent_name: str
+    agent_ext: str
+    agent_email: str
 
 # 課務組承辦人基礎資訊
 class CAgent(BaseModel):
-    NAME: str
-    EXT: str
-    EMAIL: str
+    name: str
+    ext: str
+    email: str
 
 # 班級-系所簡稱對照表模型
 class map_cls_dept(BaseModel):
-    CLASS: str
-    DEPT_S: str
+    class: str
+    dept_s: str
 
 # endregion
 
@@ -144,13 +144,13 @@ async def get_depts():
     try:
         sql = """
 SELECT
-    d.ID, COLLEGE, COLLEGE_S, DEPT, DEPT_S, STYPE, 
-    AGENT_NAME, AGENT_EXT, AGENT_EMAIL,
-    ca.ID as CAGENT_ID, ca.NAME as CAGENT_NAME, ca.EXT as CAGENT_EXT, ca.EMAIL as CAGENT_EMAIL
+    d.id, college, college_s, dept, dept_s, stype, 
+    agent_name, agent_ext, agent_email,
+    ca.id as cagent_id, ca.name as cagent_name, ca.ext as cagent_ext, ca.email as cagent_email
 FROM
     depts AS d
 LEFT JOIN
-    cagents AS ca ON d.CAGENT_ID = ca.ID;
+    cagents AS ca ON d.cagent_id = ca.id;
 """
         data = await asyncio.to_thread(execute_query, sql)
         return data
