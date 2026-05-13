@@ -123,6 +123,8 @@ def user_login(request: LoginRequest):
         raise HTTPException(status_code=500, detail="伺服器錯誤: 資料庫連線失敗")
 
     if not user_data:
+        print(f"request.username=",request.username)
+        print(f"request.password=",request.password)
         raise HTTPException(status_code=401, detail="帳號或密碼錯誤")
 
     return {
@@ -155,6 +157,121 @@ LEFT JOIN
     except DatabaseError as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch departments: {e}")
 # endregion
+
+# region CAGENTS - GET 
+
+@app.get("/get_cagents", summary="查詢所有課務組承辦人資料")
+def get_cagents():
+    try:
+        sql = """
+            SELECT id, name, ext, email
+            FROM cagents
+            ORDER BY id
+        """
+
+        data = execute_query(sql)
+        return data
+
+    except DatabaseError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch C Agents: {e}")
+
+# endregion
+
+# region CAGENTS - CREATE
+
+@app.post("/create_cagent", summary="新增課務組承辦人資料")
+def create_cagent(item: CAgent):
+
+    sql = """
+        INSERT INTO cagents (name, ext, email)
+        VALUES (:name, :ext, :email)
+    """
+
+    params = {
+        "name": item.NAME.strip(),
+        "ext": item.EXT.strip(),
+        "email": item.EMAIL.strip()
+    }
+
+    try:
+        execute_query(sql, params)
+        return {"message": "Curri agent added successfully."}
+
+    except UniqueConstraintError:
+        raise HTTPException(status_code=409, detail="唯一約束衝突 (可能姓名或 Email 已存在)")
+    except DatabaseError as e:
+        raise HTTPException(status_code=500, detail=f"資料庫錯誤: {e}")
+
+# endregion
+
+# region CAGENTS - UPDATE
+
+@app.put("/update_cagent/{cagent_id}", summary="修改指定 ID 的課務組承辦人資料")
+def update_cagent(cagent_id: int, item: CAgent):
+
+    sql = """
+        UPDATE cagents
+        SET name = :name,
+            ext = :ext,
+            email = :email
+        WHERE id = :id
+    """
+
+    params = {
+        "name": item.NAME.strip(),
+        "ext": item.EXT.strip(),
+        "email": item.EMAIL.strip(),
+        "id": cagent_id
+    }
+
+    try:
+        result = execute_query(sql, params)
+
+        if result == 0:
+            raise HTTPException(status_code=404, detail=f"Curri agent with ID {cagent_id} not found.")
+
+        return {"message": "Curri agent updated successfully."}
+
+    except UniqueConstraintError:
+        raise HTTPException(status_code=409, detail="唯一約束衝突")
+    except DatabaseError as e:
+        raise HTTPException(status_code=500, detail=f"資料庫錯誤: {e}")
+
+# endregion
+
+# region CAGENTS - DELETE
+
+@app.delete("/delete_cagent/{cagent_id}", summary="刪除指定 ID 的課務組承辦人資料")
+def delete_cagent(cagent_id: int):
+
+    sql = """
+        DELETE FROM cagents
+        WHERE id = :id
+    """
+
+    try:
+        result = execute_query(sql, {"id": cagent_id})
+
+        if result == 0:
+            raise HTTPException(status_code=404, detail=f"Curri agent with ID {cagent_id} not found.")
+
+        return {"message": "Curri agent deleted successfully."}
+
+    except DatabaseError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete Curri agent: {e}")
+
+# endregion
+
+
+
+
+
+
+
+
+
+
+
 
 
 
