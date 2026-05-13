@@ -5,6 +5,7 @@ import tempfile
 import os
 import shutil
 import uuid
+
 from urllib.parse import quote, unquote # 🎯 修正點：引入 unquote 來解碼檔案名
 import json 
 # 修正點：引入 asyncio 
@@ -17,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.types import ASGIApp
 from starlette.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional, Literal, Any, Dict
 # 🎯 新增：引入 pathlib 來處理路徑
 from pathlib import Path 
@@ -188,9 +189,9 @@ def create_cagent(item: CAgent):
     """
 
     params = {
-        "name": item.NAME.strip(),
-        "ext": item.EXT.strip(),
-        "email": item.EMAIL.strip()
+        "name": item.name.strip(),
+        "ext": item.ext.strip(),
+        "email": item.email.strip()
     }
 
     try:
@@ -218,9 +219,9 @@ def update_cagent(cagent_id: int, item: CAgent):
     """
 
     params = {
-        "name": item.NAME.strip(),
-        "ext": item.EXT.strip(),
-        "email": item.EMAIL.strip(),
+        "name": item.name.strip(),
+        "ext": item.ext.strip(),
+        "email": item.email.strip(),
         "id": cagent_id
     }
 
