@@ -680,7 +680,34 @@ def delete_map_cls_dept(map_cls_dept_id: int, user=Depends(verify_token)):
 
 # endregion
 
+# region get_all_data 系所班級轉換用 
+@app.get("/get_all_data")
+def get_all_data(user=Depends(verify_token)):
+    try:
+        sql = """
+            SELECT
+                c.class AS "CLASS",
+                c.dept_s AS "DEPT_S",
+                d.dept AS "DEPT",
+                d.college AS "COLLEGE",
+                d.college_s AS "COLLEGE_S",
+                d.agent_name AS "AGENT_NAME",
+                d.agent_ext AS "AGENT_EXT",
+                d.agent_email AS "AGENT_EMAIL",
+                ca.id AS "CAGENT_ID",
+                ca.name AS "CAGENT_NAME",
+                ca.ext AS "CAGENT_EXT",
+                ca.email AS "CAGENT_EMAIL"
+            FROM map_cls_dept c
+            JOIN depts d ON c.dept_s = d.dept_s
+            JOIN cagents ca ON ca.id = d.cagent_id
+        """
 
+        return execute_query(sql)
+
+    except DatabaseError as e:
+        raise HTTPException(500, f"讀取資料失敗: {e}")
+# endregion
 
 
 
