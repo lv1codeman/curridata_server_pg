@@ -211,13 +211,15 @@ if not SECRET_KEY:
     raise ValueError("❌ SECRET_KEY 未設定")
 
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
+# 設定登入15分鐘後token過期
+ACCESS_TOKEN_EXPIRE_MINUTES = 15
 
 security = HTTPBearer()
 
 def create_access_token(data: dict):
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    # expire = datetime.utcnow() + timedelta(seconds=5)
     to_encode.update({"exp": expire})
 
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
@@ -333,7 +335,7 @@ def delete_member(id: int, user=Depends(verify_token)):
 # region depts - GET 
 
 @app.get("/get_depts", summary="讀取所有系所資料及承辦人資訊")
-def get_depts():
+def get_depts(user=Depends(verify_token)):
     try:
         sql = """
         SELECT
@@ -364,7 +366,7 @@ def get_depts():
 # region depts - CREATE 
 
 @app.post("/create_dept", summary="新增系所資料")
-def create_dept(item: DeptWithAgent):
+def create_dept(item: DeptWithAgent,user=Depends(verify_token)):
 
     sql = """
         INSERT INTO depts (
@@ -403,7 +405,7 @@ def create_dept(item: DeptWithAgent):
 # region depts - UPDATE 
 
 @app.put("/update_dept/{dept_id}", summary="修改指定 ID 的系所資料")
-def update_dept(dept_id: int, item: DeptWithAgent):
+def update_dept(dept_id: int, item: DeptWithAgent, user=Depends(verify_token)):
 
     sql = """
         UPDATE depts
@@ -451,7 +453,7 @@ def update_dept(dept_id: int, item: DeptWithAgent):
 # region depts - DELETE 
 
 @app.delete("/delete_dept/{dept_id}", summary="刪除指定 ID 的系所資料")
-def delete_dept(dept_id: int):
+def delete_dept(dept_id: int, user=Depends(verify_token)):
 
     sql = """
         DELETE FROM depts
@@ -474,7 +476,7 @@ def delete_dept(dept_id: int):
 # region cagents - GET 
 
 @app.get("/get_cagents", summary="查詢所有課務組承辦人資料")
-def get_cagents():
+def get_cagents(user=Depends(verify_token)):
     try:
         sql = """
             SELECT id, name, ext, email
@@ -493,7 +495,7 @@ def get_cagents():
 # region cagents - CREATE 
 
 @app.post("/create_cagent", summary="新增課務組承辦人資料")
-def create_cagent(item: CAgent):
+def create_cagent(item: CAgent, user=Depends(verify_token)):
 
     sql = """
         INSERT INTO cagents (name, ext, email)
@@ -520,7 +522,7 @@ def create_cagent(item: CAgent):
 # region cagents - UPDATE 
 
 @app.put("/update_cagent/{cagent_id}", summary="修改指定 ID 的課務組承辦人資料")
-def update_cagent(cagent_id: int, item: CAgent):
+def update_cagent(cagent_id: int, item: CAgent, user=Depends(verify_token)):
 
     sql = """
         UPDATE cagents
@@ -555,7 +557,7 @@ def update_cagent(cagent_id: int, item: CAgent):
 # region cagents - DELETE 
 
 @app.delete("/delete_cagent/{cagent_id}", summary="刪除指定 ID 的課務組承辦人資料")
-def delete_cagent(cagent_id: int):
+def delete_cagent(cagent_id: int, user=Depends(verify_token)):
 
     sql = """
         DELETE FROM cagents
@@ -578,7 +580,7 @@ def delete_cagent(cagent_id: int):
 # region map_cls_dept - GET 
 
 @app.get("/get_map_cls_dept", summary="查詢所有班級-系所簡稱對照資料")
-def get_map_cls_dept():
+def get_map_cls_dept(user=Depends(verify_token)):
     try:
         sql = """
             SELECT
@@ -598,7 +600,7 @@ def get_map_cls_dept():
 # region map_cls_dept - CREATE 
 
 @app.post("/create_map_cls_dept", summary="新增班級-系所簡稱對照")
-def create_map_cls_dept(item: MapClsDept):
+def create_map_cls_dept(item: MapClsDept, user=Depends(verify_token)):
 
     sql = """
         INSERT INTO map_cls_dept (class, dept_s)
@@ -624,7 +626,7 @@ def create_map_cls_dept(item: MapClsDept):
 # region map_cls_dept - UPDATE 
 
 @app.put("/update_map_cls_dept/{map_cls_dept_id}", summary="修改指定 ID 的班級-系所簡稱對照")
-def update_map_cls_dept(map_cls_dept_id: int, item: MapClsDept):
+def update_map_cls_dept(map_cls_dept_id: int, item: MapClsDept, user=Depends(verify_token)):
 
     sql = """
         UPDATE map_cls_dept
@@ -658,7 +660,7 @@ def update_map_cls_dept(map_cls_dept_id: int, item: MapClsDept):
 # region map_cls_dept - DELETE 
 
 @app.delete("/delete_map_cls_dept/{map_cls_dept_id}", summary="刪除指定 ID 的班級-系所簡稱對照")
-def delete_map_cls_dept(map_cls_dept_id: int):
+def delete_map_cls_dept(map_cls_dept_id: int, user=Depends(verify_token)):
 
     sql = """
         DELETE FROM map_cls_dept
