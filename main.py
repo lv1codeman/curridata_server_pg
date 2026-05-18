@@ -237,11 +237,29 @@ def verify_token(token=Depends(security)):
 
 # endregion
 
+# region 統一權限 dependency 
+def require_roles(roles: list[str]):
+    def checker(user=Depends(verify_token)):
+        user_role = user.get("auth")
+
+        # ✅ admin 全通
+        if user_role == "admin":
+            return user
+        # 有除了自訂角色以外的角色時，返回權限不足，否則回傳user
+        if user_role not in roles:
+            raise HTTPException(
+                status_code=403,
+                detail="權限不足"
+            )
+
+        return user
+    return checker
+# endregion
 
 # region MEMBERS - GET 
 
 @app.get("/get_members", summary="查詢所有使用者")
-def get_members(user=Depends(verify_token)):
+def get_members(user=Depends(require_roles(["admin"]))):
     try:
         sql = """
             SELECT id, account, name, auth
@@ -258,7 +276,7 @@ def get_members(user=Depends(verify_token)):
 # region MEMBERS - CREATE 
 
 @app.post("/create_member", summary="新增使用者")
-def create_member(item: Member, user=Depends(verify_token)):
+def create_member(item: Member, user=Depends(require_roles(["admin"]))):
 
     sql = """
         INSERT INTO members (account, pwd, name, auth)
@@ -284,7 +302,7 @@ def create_member(item: Member, user=Depends(verify_token)):
 # region MEMBERS - UPDATE 
 
 @app.put("/update_member/{id}", summary="修改使用者")
-def update_member(id: int, item: Member, user=Depends(verify_token)):
+def update_member(id: int, item: Member, user=Depends(require_roles(["admin"]))):
 
     sql = """
         UPDATE members
@@ -316,7 +334,7 @@ def update_member(id: int, item: Member, user=Depends(verify_token)):
 # region MEMBERS - DELETE 
 
 @app.delete("/delete_member/{id}", summary="刪除使用者")
-def delete_member(id: int, user=Depends(verify_token)):
+def delete_member(id: int, user=Depends(require_roles(["admin"]))):
 
     sql = """
         DELETE FROM members WHERE id = :id
@@ -334,7 +352,7 @@ def delete_member(id: int, user=Depends(verify_token)):
 # region depts - GET 
 
 @app.get("/get_depts", summary="讀取所有系所資料及承辦人資訊")
-def get_depts(user=Depends(verify_token)):
+def get_depts(user=Depends(require_roles(["curri", "user"]))):
     try:
         sql = """
         SELECT
@@ -365,7 +383,7 @@ def get_depts(user=Depends(verify_token)):
 # region depts - CREATE 
 
 @app.post("/create_dept", summary="新增系所資料")
-def create_dept(item: DeptWithAgent,user=Depends(verify_token)):
+def create_dept(item: DeptWithAgent,user=Depends(require_roles(["curri"]))):
 
     sql = """
         INSERT INTO depts (
@@ -404,7 +422,7 @@ def create_dept(item: DeptWithAgent,user=Depends(verify_token)):
 # region depts - UPDATE 
 
 @app.put("/update_dept/{dept_id}", summary="修改指定 ID 的系所資料")
-def update_dept(dept_id: int, item: DeptWithAgent, user=Depends(verify_token)):
+def update_dept(dept_id: int, item: DeptWithAgent, user=Depends(require_roles(["curri"]))):
 
     sql = """
         UPDATE depts
@@ -452,7 +470,7 @@ def update_dept(dept_id: int, item: DeptWithAgent, user=Depends(verify_token)):
 # region depts - DELETE 
 
 @app.delete("/delete_dept/{dept_id}", summary="刪除指定 ID 的系所資料")
-def delete_dept(dept_id: int, user=Depends(verify_token)):
+def delete_dept(dept_id: int, user=Depends(require_roles(["curri"]))):
 
     sql = """
         DELETE FROM depts
@@ -475,7 +493,7 @@ def delete_dept(dept_id: int, user=Depends(verify_token)):
 # region cagents - GET 
 
 @app.get("/get_cagents", summary="查詢所有課務組承辦人資料")
-def get_cagents(user=Depends(verify_token)):
+def get_cagents(user=Depends(require_roles(["admin"]))):
     try:
         sql = """
             SELECT id, name, ext, email
@@ -494,7 +512,7 @@ def get_cagents(user=Depends(verify_token)):
 # region cagents - CREATE 
 
 @app.post("/create_cagent", summary="新增課務組承辦人資料")
-def create_cagent(item: CAgent, user=Depends(verify_token)):
+def create_cagent(item: CAgent, user=Depends(require_roles(["admin"]))):
 
     sql = """
         INSERT INTO cagents (name, ext, email)
@@ -521,7 +539,7 @@ def create_cagent(item: CAgent, user=Depends(verify_token)):
 # region cagents - UPDATE 
 
 @app.put("/update_cagent/{cagent_id}", summary="修改指定 ID 的課務組承辦人資料")
-def update_cagent(cagent_id: int, item: CAgent, user=Depends(verify_token)):
+def update_cagent(cagent_id: int, item: CAgent, user=Depends(require_roles(["admin"]))):
 
     sql = """
         UPDATE cagents
@@ -556,7 +574,7 @@ def update_cagent(cagent_id: int, item: CAgent, user=Depends(verify_token)):
 # region cagents - DELETE 
 
 @app.delete("/delete_cagent/{cagent_id}", summary="刪除指定 ID 的課務組承辦人資料")
-def delete_cagent(cagent_id: int, user=Depends(verify_token)):
+def delete_cagent(cagent_id: int, user=Depends(require_roles(["admin"]))):
 
     sql = """
         DELETE FROM cagents
@@ -599,7 +617,7 @@ def get_map_cls_dept(user=Depends(verify_token)):
 # region map_cls_dept - CREATE 
 
 @app.post("/create_map_cls_dept", summary="新增班級-系所簡稱對照")
-def create_map_cls_dept(item: MapClsDept, user=Depends(verify_token)):
+def create_map_cls_dept(item: MapClsDept, user=Depends(require_roles(["curri"]))):
 
     sql = """
         INSERT INTO map_cls_dept (class, dept_s)
@@ -625,7 +643,7 @@ def create_map_cls_dept(item: MapClsDept, user=Depends(verify_token)):
 # region map_cls_dept - UPDATE 
 
 @app.put("/update_map_cls_dept/{map_cls_dept_id}", summary="修改指定 ID 的班級-系所簡稱對照")
-def update_map_cls_dept(map_cls_dept_id: int, item: MapClsDept, user=Depends(verify_token)):
+def update_map_cls_dept(map_cls_dept_id: int, item: MapClsDept, Depends(require_roles(["curri"]))):
 
     sql = """
         UPDATE map_cls_dept
@@ -659,7 +677,7 @@ def update_map_cls_dept(map_cls_dept_id: int, item: MapClsDept, user=Depends(ver
 # region map_cls_dept - DELETE 
 
 @app.delete("/delete_map_cls_dept/{map_cls_dept_id}", summary="刪除指定 ID 的班級-系所簡稱對照")
-def delete_map_cls_dept(map_cls_dept_id: int, user=Depends(verify_token)):
+def delete_map_cls_dept(map_cls_dept_id: int, user=Depends(require_roles(["curri"]))):
 
     sql = """
         DELETE FROM map_cls_dept
@@ -681,7 +699,7 @@ def delete_map_cls_dept(map_cls_dept_id: int, user=Depends(verify_token)):
 
 # region get_all_data 系所班級轉換用 
 @app.get("/get_all_data")
-def get_all_data(user=Depends(verify_token)):
+def get_all_data(user=Depends(require_roles(["curri", "user"]))):
     try:
         sql = """
             SELECT
