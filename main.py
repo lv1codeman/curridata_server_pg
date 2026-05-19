@@ -643,7 +643,7 @@ def create_map_cls_dept(item: MapClsDept, user=Depends(require_roles(["curri"]))
 # region map_cls_dept - UPDATE 
 
 @app.put("/update_map_cls_dept/{map_cls_dept_id}", summary="修改指定 ID 的班級-系所簡稱對照")
-def update_map_cls_dept(map_cls_dept_id: int, item: MapClsDept, Depends(require_roles(["curri"]))):
+def update_map_cls_dept(map_cls_dept_id: int, item: MapClsDept, user=Depends(require_roles(["curri"]))):
 
     sql = """
         UPDATE map_cls_dept
