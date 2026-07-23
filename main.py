@@ -498,7 +498,7 @@ def delete_dept(dept_id: int, user=Depends(require_roles(["curri"]))):
 # region cagents - GET 
 
 @app.get("/get_cagents", summary="查詢所有課務組承辦人資料")
-def get_cagents(user=Depends(require_roles(["admin"]))):
+def get_cagents(user=Depends(require_roles(["curri", "user"]))):
     try:
         sql = """
             SELECT id, name, ext, email
