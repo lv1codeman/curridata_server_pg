@@ -1,4 +1,5 @@
 # region 宣告import 
+from main import app
 from database_helper_pg import execute_query, DatabaseError, UniqueConstraintError
 import time
 import tempfile
