@@ -7,9 +7,8 @@ from dotenv import load_dotenv
 import shutil
 import uuid
 
-from urllib.parse import quote, unquote # 🎯 修正點：引入 unquote 來解碼檔案名
+from urllib.parse import quote, unquote
 import json 
-# 修正點：引入 asyncio 
 import asyncio
 from fastapi.responses import FileResponse
 from fastapi import FastAPI, HTTPException, Request, Response, Body, BackgroundTasks, File, UploadFile, Form, Depends
@@ -24,6 +23,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Literal, Any, Dict
 # 🎯 新增：引入 pathlib 來處理路徑
 from pathlib import Path 
+from course_query import router as course_router
 
 # --- 🎯 新增的依賴：處理異步檔案操作 (推薦) ---
 import aiofiles 
@@ -51,6 +51,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 # endregion
+
+# 2. 註冊/掛載路由
+app.include_router(course_router)
 
 # region 資料模型 (Pydantic) 
 class LoginRequest(BaseModel):

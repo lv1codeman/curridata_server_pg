@@ -6,3 +6,8 @@ aiofiles
 yt-dlp
 python-jose[cryptography]
 python-dotenv
+requests
+beautifulsoup4
+pandas
+openpyxl
+lxml
