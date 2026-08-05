@@ -1,4 +1,5 @@
 {
+  "regions": ["hkg1"],
   "builds": [
     {
       "src": "api/index.py",
