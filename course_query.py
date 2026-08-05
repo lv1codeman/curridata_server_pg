@@ -69,13 +69,13 @@ def download_courses(
             "sel_cls_branch": branch if branch else "",
             "sel_yms_year": year if year else "",
             "sel_yms_smester": semester if semester else "",
-            "sel_cls_id": crsid if crsid else "",
+            "sel_cls_id": class_id if class_id else "",
             "sel_scr_english": eng if eng else "",
             "sel_SCR_IS_DIS_LEARN": dis_learn if dis_learn else "",
-            "scr_selcode": crsid if crsid else "",
+            "scr_selcode": course_id if course_id else "",
             "sel_sct_week": week if week else "",
-            "sub_name": crsnm if crsnm else "",
-            "emp_name": tchnm if tchnm else "",
+            "sub_name": course_name if course_name else "",
+            "emp_name": teacher_name if teacher_name else "",
         })
 
         # 2. 發送 POST 查詢請求
