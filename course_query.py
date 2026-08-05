@@ -128,3 +128,31 @@ def download_courses(
         raise HTTPException(status_code=504, detail=f"Proxy 連線或請求彰師大逾時/失敗: {str(req_err)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"伺服器處理失敗: {str(e)}")
+
+@router.get("/get_classes")
+def get_classes(
+    year: str = Query(default="115", description="學年度"),
+    semester: str = Query(default="1", description="學期"),
+    branch: str = Query(default="D", description="部別(D, N)")
+):
+    # 彰師大 取得班級清單的 API
+    url = "https://webapt.ncue.edu.tw/DEANV2/Other/OB010/GetJson_ddl_scj_cls_id"
+    params = {
+        "year": year,
+        "smester": semester, # 留意學校原端拼字少 e
+        "CLS_BRANCH": branch
+    }
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": "https://webapt.ncue.edu.tw/deanv2/other/ob010"
+    }
+
+    try:
+        # 透過 Session + Proxy 去發送請求
+        session = requests.Session()
+        session.proxies.update(PROXIES)
+        
+        res = session.get(url, params=params, headers=headers, timeout=8)
+        return res.json() # 直接將彰師大回傳的 JSON 丟回給前端
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"無法取得班級清單: {str(e)}")
