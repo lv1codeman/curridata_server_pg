@@ -32,13 +32,13 @@ def download_courses(
     branch: str = Query(default="", description="部別(日間部D、夜間部N)"),
     year: str = Query(default="115", description="學年度"),
     semester: str = Query(default="1", description="學期"),
-    clsid: str = Query(default="", description="班級代碼"),
+    class_id: str = Query(default="", description="班級代碼"),
     eng: str = Query(default="", description="全英語教學(Y,N)"),
     dis_learn: str = Query(default="", description="遠距教學(Y,N)"),
-    crsid: str = Query(default="", description="課程代碼"),
+    course_id: str = Query(default="", description="課程代碼"),
     week: str = Query(default="", description="星期"),
-    crsnm: str = Query(default="", description="課程名稱"),
-    tchnm: str = Query(default="", description="教師名稱"),
+    course_name: str = Query(default="", description="課程名稱"),
+    teacher_name: str = Query(default="", description="教師名稱"),
 ):
     url = "https://webapt.ncue.edu.tw/deanv2/other/ob010"
     headers = {
