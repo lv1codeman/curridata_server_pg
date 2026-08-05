@@ -119,6 +119,46 @@ async def post_test(item: DownloadRequest):
     print("format: ", item.format)
     
     return "post成功囉"
+
+# 測試資料庫
+from fastapi import APIRouter, HTTPException
+from sqlalchemy import create_engine, text
+
+router = APIRouter()
+
+@router.get("/api/db-check")
+def check_db_connection():
+    # 讀取 Vercel 設定的環境變數
+    db_url = os.getenv("DATABASE_URL")
+    
+    if not db_url:
+        return {
+            "status": "error",
+            "message": "❌ DATABASE_URL 環境變數未設定！"
+        }
+    
+    try:
+        # 嘗試建立連線並執行簡單查詢
+        engine = create_engine(db_url, connect_args={"connect_timeout": 5})
+        with engine.connect() as connection:
+            # 查詢目前連線的資料庫名稱與版本
+            result = connection.execute(text("SELECT current_database(), version();")).fetchone()
+            db_name = result[0]
+            db_version = result[1]
+            
+            return {
+                "status": "success",
+                "message": "🎉 成功連線到 Neon 資料庫！",
+                "database_name": db_name,
+                "db_url": db_url,
+                "is_neon": "neon" in db_version.lower() or "postgresql" in db_version.lower(),
+                "db_version_preview": db_version[:50]
+            }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"❌ 資料庫連線失敗: {str(e)}"
+        )
 #endregion
 
 # region (舊版 暫不使用) [API] 使用者登入 驗證帳號密碼 
