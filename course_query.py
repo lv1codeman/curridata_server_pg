@@ -10,6 +10,13 @@ from fastapi.responses import StreamingResponse
 # 建立獨立的 Router 物件
 router = APIRouter(prefix="/api", tags=["Course Query"])
 
+# 設定台灣 Proxy 伺服器資訊
+PROXY_URL = "http://114.35.132.4:37364"
+PROXIES = {
+    "http": PROXY_URL,
+    "https": PROXY_URL
+}
+
 def split_course_name(name):
     """拆分中英文課程名稱"""
     if not isinstance(name, str):
@@ -27,17 +34,20 @@ def download_courses(
 ):
     url = "https://webapt.ncue.edu.tw/deanv2/other/ob010"
     headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-    "Accept-Language": "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Referer": "https://webapt.ncue.edu.tw/deanv2/other/ob010",
-    "Origin": "https://webapt.ncue.edu.tw"
-}
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://webapt.ncue.edu.tw/deanv2/other/ob010",
+        "Origin": "https://webapt.ncue.edu.tw"
+    }
 
     session = requests.Session()
+    # 關鍵修改：將 Proxy 直接綁定給 Session，後續所有 requests 均會透過此 Proxy 轉發
+    session.proxies.update(PROXIES)
+
     try:
         # 1. 取得初始頁面並自動擷取隱藏欄位 (如防偽 Token)
-        init_res = session.get(url, headers=headers, timeout=10)
+        init_res = session.get(url, headers=headers, timeout=8)
         soup = BeautifulSoup(init_res.text, 'html.parser')
 
         payload = {}
@@ -53,7 +63,7 @@ def download_courses(
         })
 
         # 2. 發送 POST 查詢請求
-        search_res = session.post(url, data=payload, headers=headers, timeout=15)
+        search_res = session.post(url, data=payload, headers=headers, timeout=12)
         search_res.encoding = 'utf-8'
 
         # 3. 解析 HTML 中的表格
@@ -94,5 +104,11 @@ def download_courses(
             }
         )
 
+    except HTTPException:
+        # 直接拋出自訂的 HTTPException (如 404)
+        raise
+    except requests.exceptions.RequestException as req_err:
+        # 針對 Proxy 或網路逾時特化錯誤說明
+        raise HTTPException(status_code=504, detail=f"Proxy 連線或請求彰師大逾時/失敗: {str(req_err)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"伺服器處理失敗: {str(e)}")
