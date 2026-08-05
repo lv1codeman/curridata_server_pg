@@ -142,11 +142,10 @@ def check_db_connection():
             
             return {
                 "status": "success",
-                "message": "🎉 成功連線到 Neon 資料庫！",
-                "database_name": db_name,
+                "secret_key": secret_key,
                 "db_url": db_url,
-                "db_version_preview": db_version[:50],
-                "secret_key": secret_key
+                "database_name": db_name,
+                "db_version_preview": db_version[:50]
             }
     except Exception as e:
         raise HTTPException(
