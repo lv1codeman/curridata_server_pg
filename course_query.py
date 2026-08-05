@@ -27,7 +27,7 @@ def split_course_name(name):
     else:
         return pd.Series([name.strip(), ""])
 
-@router.get("/download-courses")
+@router.get("/course_query")
 def download_courses(
     year: str = Query(default="115", description="學年度"),
     semester: str = Query(default="1", description="學期")
@@ -58,8 +58,16 @@ def download_courses(
                 payload[name] = value
 
         payload.update({
-            "sel_yms_year": year,
-            "sel_yms_smester": semester
+            "sel_cls_branch": branch if branch else "",
+            "sel_yms_year": year if year else "",
+            "sel_yms_smester": semester if semester else "",
+            "sel_cls_id": crsid if crsid else "",
+            "sel_scr_english": eng if eng else "",
+            "sel_SCR_IS_DIS_LEARN": dis_learn if dis_learn else "",
+            "scr_selcode": crsid if crsid else "",
+            "sel_sct_week": week if week else "",
+            "sub_name": crsnm if crsnm else "",
+            "emp_name": tchnm if tchnm else "",
         })
 
         # 2. 發送 POST 查詢請求
