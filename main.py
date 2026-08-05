@@ -24,6 +24,8 @@ from typing import List, Optional, Literal, Any, Dict
 # 🎯 新增：引入 pathlib 來處理路徑
 from pathlib import Path 
 from course_query import router as course_router
+# 測試資料庫用
+from sqlalchemy import create_engine, text
 
 # --- 🎯 新增的依賴：處理異步檔案操作 (推薦) ---
 import aiofiles 
@@ -121,12 +123,9 @@ async def post_test(item: DownloadRequest):
     return "post成功囉"
 
 # 測試資料庫
-from fastapi import APIRouter, HTTPException
-from sqlalchemy import create_engine, text
-
 router = APIRouter()
 
-@router.get("/api/db-check")
+@app.get("/db-check")
 def check_db_connection():
     # 讀取 Vercel 設定的環境變數
     db_url = os.getenv("DATABASE_URL")
