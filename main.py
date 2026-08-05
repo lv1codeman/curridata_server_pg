@@ -125,16 +125,11 @@ async def post_test(item: DownloadRequest):
 # 測試資料庫
 router = APIRouter()
 
-@app.get("/db-check")
+@app.get("/get_env_var")
 def check_db_connection():
     # 讀取 Vercel 設定的環境變數
     db_url = os.getenv("DATABASE_URL")
-    
-    if not db_url:
-        return {
-            "status": "error",
-            "message": "❌ DATABASE_URL 環境變數未設定！"
-        }
+    secret_key = os.getenv("SECRET_KEY")
     
     try:
         # 嘗試建立連線並執行簡單查詢
@@ -150,8 +145,8 @@ def check_db_connection():
                 "message": "🎉 成功連線到 Neon 資料庫！",
                 "database_name": db_name,
                 "db_url": db_url,
-                "is_neon": "neon" in db_version.lower() or "postgresql" in db_version.lower(),
-                "db_version_preview": db_version[:50]
+                "db_version_preview": db_version[:50],
+                "secret_key": secret_key
             }
     except Exception as e:
         raise HTTPException(
